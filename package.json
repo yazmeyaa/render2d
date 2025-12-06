@@ -1,0 +1,70 @@
+{
+  "name": "render2d",
+  "private": false,
+  "version": "0.0.0",
+  "description": "High-performance 2D renderer built on WebGL2 with batching, instancing and atlas support.",
+  "license": "MIT",
+  "author": "yazmeyaa",
+  "homepage": "https://githib.com/yazmeyaa/render2d#readme",
+  "bugs": {
+    "url": "https://githib.com/yazmeyaa/render2d/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://githib.com/yazmeyaa/render2d.git"
+  },
+  "main": "./dist/index.umd.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=16"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.umd.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "2d",
+    "2d-engine",
+    "renderer",
+    "rendering",
+    "graphics",
+    "webgl",
+    "webgl2",
+    "gpu",
+    "instancing",
+    "sprite",
+    "sprites",
+    "sprite-batching",
+    "atlas",
+    "texture-atlas",
+    "game",
+    "ecs",
+    "game-engine",
+    "graphics-engine"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.2.4",
+    "vite-plugin-dts": "^4.5.4"
+  }
+}
