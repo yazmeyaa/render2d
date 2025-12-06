@@ -1,7 +1,7 @@
 {
   "name": "render2d",
   "private": false,
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "High-performance 2D renderer built on WebGL2 with batching, instancing and atlas support.",
   "license": "MIT",
   "author": "yazmeyaa",
