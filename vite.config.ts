@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import path from "path";
 import dts from 'vite-plugin-dts';
+import glsl from 'vite-plugin-glsl'
 
 const libConfig = defineConfig({
     build: {
@@ -10,7 +11,7 @@ const libConfig = defineConfig({
             name: 'bitmap-index'
         },
     },
-    plugins: [dts({exclude: "**/*.test.ts"})],
+    plugins: [dts({exclude: "**/*.test.ts"}), glsl()],
 });
 
 export default libConfig
