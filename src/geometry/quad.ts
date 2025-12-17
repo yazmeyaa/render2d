@@ -1,4 +1,5 @@
 import { ATTRIBUTES_LAYOUT } from "../attributes";
+import type { ShaderProgram } from "../shader_program/shader_builder";
 import type { Geometry } from "./geometry";
 
 export class QuadGeometry implements Geometry {
@@ -48,5 +49,26 @@ export class QuadGeometry implements Geometry {
 
         gl.bindVertexArray(null);
         gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    }
+
+    applyAttributesToProgram(p: ShaderProgram): void {
+        p.addAttributes(
+            {
+                type: "vec2",
+                name: "geometry",
+                normalized: false,
+                isInstanceAttribute: false,
+                needPassToFragmentShader: false
+            }
+        )
+
+        p.addVertexActions<'geometry'>(
+            {
+                apply({ attributes, vertPosVarName }) {
+                    const { geometry } = attributes
+                    return `${vertPosVarName} = vec3(${geometry}, ${vertPosVarName}.z);`
+                },
+            }
+        )
     }
 }

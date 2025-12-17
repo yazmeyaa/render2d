@@ -1,3 +1,4 @@
+import type { ShaderProgram } from "../shader_program/shader_builder";
 import { QuadGeometry } from "./quad";
 
 export type Geometry = {
@@ -6,6 +7,8 @@ export type Geometry = {
     readonly vao: WebGLVertexArrayObject;
     readonly indexCount: number;
     readonly primitiveType: number;
+
+    applyAttributesToProgram(p: ShaderProgram): void;
 }
 
 
