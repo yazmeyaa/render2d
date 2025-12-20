@@ -1,5 +1,6 @@
-import { GeometryManager } from './geometry/geometry';
-import { ShaderProgram } from './shader_program/shader_builder';
+import { GeometryManager } from './geometry/geometry_manager';
+import { ShaderProgramBuilder } from './shader_program/shader_builder';
+import type { RuntimeAttribute } from './shader_program/types';
 
 const canvas = document.getElementById('canvas')! as HTMLCanvasElement;
 const gl = canvas.getContext('webgl2')!;
@@ -8,18 +9,12 @@ canvas.height = window.innerHeight;
 gl.viewport(0, 0, canvas.width, canvas.height);
 
 const geoManager = new GeometryManager(gl);
-const q = geoManager.getQuad();
-const p = new ShaderProgram();
+const q = geoManager.getGeometry('quad')
+const p = new ShaderProgramBuilder();
 q.applyAttributesToProgram(p);
 
+
 p.addAttributes(
-    {
-        type: 'vec2',
-        name: 'position',
-        normalized: false,
-        isInstanceAttribute: false,
-        needPassToFragmentShader: true
-    },
     {
         type: 'mat3',
         name: 'translation_matrix',
@@ -43,7 +38,14 @@ p.addAttributes(
     }
 )
 
-type ProgramEnvironment = { attributes: 'translation_matrix' | 'rotation_matrix' | 'scale_matrix', uniforms: 'sun_position' | 'moon_position' | 'entities_count' };
+p.addUniforms({
+    type: 'ivec3',
+    name: 'sun_position',
+    isVertexUniform: true,
+    isFragmentUniform: true
+})
+
+type ProgramEnvironment = { attributes: 'translation_matrix' | 'rotation_matrix' | 'scale_matrix', uniforms: 'sun_position' };
 
 p.addVertexActions<ProgramEnvironment['attributes'], ProgramEnvironment['uniforms']>(
     {
@@ -54,11 +56,17 @@ p.addVertexActions<ProgramEnvironment['attributes'], ProgramEnvironment['uniform
     }
 )
 
-p.addFragmentActions(
+p.addFragmentActions<ProgramEnvironment['attributes'], ProgramEnvironment['uniforms']>(
     {
-        apply({colorVar}) {
+        apply({ colorVar }) {
             // Add solid red material
             return `${colorVar} = vec4(1.0, 0.0, 0.0, 1.0);`
+        },
+    },
+    {
+        apply({ uniforms, colorVar }) {
+            const { sun_position } = uniforms;
+            return `${colorVar}.x *= float(${sun_position}.x) * 0.0;`;
         },
     }
 )
@@ -76,4 +84,20 @@ for (const source of [vertex, fragment]) {
     container.appendChild(codeContainer);
 }
 
-p.build(gl);
+const glProgram = p.build(gl);
+glProgram.use(gl);
+
+const keys = new Map<RuntimeAttribute, string>();
+const properties = new Set<string>();
+const attributes: RuntimeAttribute[] = [];
+for (const [name, attr] of glProgram.getAttributes()) {
+    for (const key in attr) {
+        properties.add(key);
+    }
+    keys.set(attr, name);
+    attributes.push(attr);
+}
+
+console.table(attributes.map((v) => ({ ...v, 'attribute name': keys.get(v), "locations": v.locations.map((l) => "0x" + l.toString(16)).join(', ') })), ["attribute name", ...properties])
+
+console.log(glProgram)

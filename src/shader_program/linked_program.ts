@@ -1,21 +1,6 @@
-import type { UniformEntryType } from "./types";
+import type { RuntimeAttribute, RuntimeUniform } from "./types";
 
-export type RuntimeAttribute = {
-    location: number
 
-    size: number
-    type: GLenum
-    normalized: boolean
-    stride: number
-    offset: number
-
-    divisor: number
-};
-
-export type RuntimeUniform = {
-    location: WebGLUniformLocation
-    type: UniformEntryType
-};
 
 export class LinkedShaderProgram {
     public readonly program: WebGLProgram;
@@ -40,6 +25,15 @@ export class LinkedShaderProgram {
         const a = this.attributes.get(name)
         if (!a) throw new Error(`Attribute '${name}' not found`)
         return a
+    }
+
+    public getAttributes(): IterableIterator<[string, RuntimeAttribute]> {
+        return this.attributes.entries();
+    }
+
+
+    public getUniforms(): IterableIterator<[string, RuntimeUniform]> {
+        return this.uniforms.entries();
     }
 
     public getUniform(name: string): RuntimeUniform {

@@ -1,11 +1,5 @@
-import type { UniformEntryType } from "./types";
-
-type AttributeMeta = {
-    size: number;
-    stride: number;
-    glType: number;
-    glslType: string;
-};
+import { LinkedShaderProgram } from "./linked_program";
+import type { RuntimeAttribute, RuntimeUniform, UniformEntryType } from "./types";
 
 type AddAttributeEntryType =
     | 'float'
@@ -16,6 +10,13 @@ type AddAttributeEntryType =
     | 'mat2'
     | 'mat3'
     | 'mat4';
+
+type AttributeMeta = {
+    size: number;
+    stride: number;
+    glType: number;
+    glslType: AddAttributeEntryType;
+};
 
 type AddAttributeEntry = {
     type: AddAttributeEntryType;
@@ -33,7 +34,7 @@ type Uniform = {
     isFragmentUniform: boolean;
 };
 
-type AttributeLayout = {
+type AttributeDescriptor = {
     location: number;
     name: string;
     size: number;
@@ -43,7 +44,7 @@ type AttributeLayout = {
     offset: number;
     divisor?: number;
 
-    glslType: string;
+    glslType: AddAttributeEntryType;
     passToFragmentShader: boolean;
     isInstanceAttribute: boolean;
 };
@@ -84,9 +85,21 @@ const ATTRIBUTE_TYPE_META: Record<AddAttributeEntryType, AttributeMeta> = {
     mat3: { size: 3, stride: F32 * 9, glType: WebGL2RenderingContext.FLOAT, glslType: 'mat3' },
     mat4: { size: 4, stride: F32 * 16, glType: WebGL2RenderingContext.FLOAT, glslType: 'mat4' },
 };
+function glslTypeInfo(type: AttributeDescriptor['glslType']): { columns: number, rows: number; } {
+    switch (type) {
+        case 'float': return { columns: 1, rows: 1 }
+        case "int": return { columns: 1, rows: 1 }
+        case 'vec2': return { columns: 1, rows: 2 }
+        case 'vec3': return { columns: 1, rows: 3 }
+        case 'vec4': return { columns: 1, rows: 4 }
+        case "mat2": return { columns: 2, rows: 2 }
+        case 'mat3': return { columns: 3, rows: 3 }
+        case 'mat4': return { columns: 4, rows: 4 }
+    }
+}
 
-export class ShaderProgram {
-    private attributes: Map<string, AttributeLayout> = new Map();
+export class ShaderProgramBuilder {
+    private attributes: Map<string, AttributeDescriptor> = new Map();
     private uniforms: Map<string, Uniform> = new Map();
 
     private vertexActions: VertexAction[] = [];
@@ -111,8 +124,10 @@ export class ShaderProgram {
     public addAttributes(...entries: AddAttributeEntry[]): this {
         for (const entry of entries) {
             const meta = ATTRIBUTE_TYPE_META[entry.type];
+            if(this.attributes.has(entry.name))
+                throw new Error(`Attribute with name "${entry.name}" has already registered in Shader Program`)
 
-            const layout: AttributeLayout = {
+            const layout: AttributeDescriptor = {
                 location: this.location,
                 name: entry.name,
                 size: meta.size,
@@ -147,7 +162,7 @@ export class ShaderProgram {
         return this;
     }
 
-    public getAttribute(name: string): AttributeLayout | null {
+    public getAttribute(name: string): AttributeDescriptor | null {
         return this.attributes.get(name) ?? null;
     }
 
@@ -155,11 +170,64 @@ export class ShaderProgram {
         return this.uniforms.get(name) ?? null;
     }
 
-    public build(gl: WebGL2RenderingContext): WebGLProgram {
-        const vs = this.createShader(gl, gl.VERTEX_SHADER, this.buildVertexSource());
-        const fs = this.createShader(gl, gl.FRAGMENT_SHADER, this.buildFragmentSource());
-        return this.createProgram(gl, vs, fs);
+    public build(gl: WebGL2RenderingContext): LinkedShaderProgram {
+        const vs = this.createShader(gl, gl.VERTEX_SHADER, this.buildVertexSource())
+        const fs = this.createShader(gl, gl.FRAGMENT_SHADER, this.buildFragmentSource())
+        const program = this.createProgram(gl, vs, fs)
+
+        gl.deleteShader(vs)
+        gl.deleteShader(fs)
+
+        const attributes = new Map<string, RuntimeAttribute>()
+        const uniforms = new Map<string, RuntimeUniform>()
+
+        let currentOffset = 0
+
+        for (const [name, desc] of this.attributes) {
+            const baseLocation = gl.getAttribLocation(program, `a_${name}`)
+            if (baseLocation === -1) {
+                continue
+            }
+
+            const { columns, rows } = glslTypeInfo(desc.glslType)
+
+            const locations: number[] = []
+            for (let i = 0; i < columns; i++) {
+                locations.push(baseLocation + i)
+            }
+
+            const stride = rows * columns * 4
+            const offset = currentOffset
+
+            attributes.set(name, {
+                locations: locations,
+                size: rows,
+                type: gl.FLOAT,
+                normalized: desc.normalized,
+                stride,
+                offset,
+                divisor: desc.isInstanceAttribute ? 1 : 0,
+            })
+
+            currentOffset += stride
+        }
+
+        for (const [name, desc] of this.uniforms) {
+            const location = gl.getUniformLocation(program, name)
+            if (location === null) {
+                console.log(location)
+                continue
+            }
+
+            uniforms.set(name, {
+                location,
+                type: desc.type,
+            })
+        }
+
+        return new LinkedShaderProgram(program, attributes, uniforms)
     }
+
 
     public buildSources(): { vertex: string; fragment: string } {
         return {
@@ -234,7 +302,7 @@ export class ShaderProgram {
         }
 
         const ctx: VertexContext = {
-            vertPosVarName: ShaderProgram.positionVar,
+            vertPosVarName: ShaderProgramBuilder.positionVar,
             attributes: this.buildAttributeMaps('vertex'),
             uniforms: this.buildUniformMap('vertex'),
         };
@@ -250,11 +318,11 @@ ${this.attributesToLayoutText()}
 ${varyingOut.join('\n')}
 
 void main() {
-    vec3 ${ShaderProgram.positionVar} = vec3(0.0);
+    vec3 ${ShaderProgramBuilder.positionVar} = vec3(0.0);
 
     ${steps.join('\n    ')}
 
-    gl_Position = vec4(${ShaderProgram.positionVar}, 1.0);
+    gl_Position = vec4(${ShaderProgramBuilder.positionVar}, 1.0);
 
     ${varyingAssign.join('\n    ')}
 }`.trim();
@@ -271,7 +339,7 @@ void main() {
             .join('\n');
 
         const ctx: FragmentContext = {
-            colorVar: ShaderProgram.fragmentColorVar,
+            colorVar: ShaderProgramBuilder.fragmentColorVar,
             attributes: this.buildAttributeMaps('fragment'),
             uniforms: this.buildUniformMap('fragment'),
         };
@@ -288,11 +356,11 @@ ${varyingIn}
 out vec4 outColor;
 
 void main() {
-    vec4 ${ShaderProgram.fragmentColorVar} = vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 ${ShaderProgramBuilder.fragmentColorVar} = vec4(0.0, 0.0, 0.0, 1.0);
 
     ${steps.join('\n    ')}
 
-    outColor = ${ShaderProgram.fragmentColorVar};
+    outColor = ${ShaderProgramBuilder.fragmentColorVar};
 }`.trim();
     }
 

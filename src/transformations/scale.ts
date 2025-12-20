@@ -1,55 +1,62 @@
-import type { ShaderProgram } from "../shader_program/shader_builder";
+import type { ShaderProgramBuilder } from "../shader_program/shader_builder";
 
-const ScaleMatrixAttributeName = 'scale_matrix' as const;
+export class ScaleInstanceData {
+    readonly data = new Float32Array(9);
 
-export class ScaleInstanceBuffer {
-    buffer: WebGLBuffer;
-    readonly data: Float32Array;
-
-    constructor(buffer: WebGLBuffer) {
-        this.data = new Float32Array([
-            1, 0, 0,
-            0, 1, 0,
+    set(x: number, y: number) {
+        this.data.set([
+            x, 0, 0,
+            0, y, 0,
             0, 0, 1,
-        ])
-        this.buffer = buffer;
+        ]);
     }
 }
 
+
+export class InstanceAttributeBuffer {
+    readonly buffer: WebGLBuffer;
+    readonly data: Float32Array;
+    readonly attributeName: string;
+
+    constructor(
+        gl: WebGL2RenderingContext,
+        attributeName: string,
+        data: Float32Array,
+        usage = gl.DYNAMIC_DRAW
+    ) {
+        this.attributeName = attributeName;
+        this.buffer = gl.createBuffer();
+        this.data = data;
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+        gl.bufferData(gl.ARRAY_BUFFER, data, usage);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    }
+
+    update(gl: WebGL2RenderingContext) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, this.data);
+        gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    }
+}
+
+
 export class ScaleTransformer {
-    private _x: number = 1;
-    public get x(): number {
-        return this._x;
-    }
-    public set x(value: number) {
-        this._x = value;
-    }
-    private _y: number = 1;
-    public get y(): number {
-        return this._y;
-    }
-    public set y(value: number) {
-        this._y = value;
-    }
+    static readonly attributeName = 'scale_matrix';
 
-    public applyToShaderProgram(p: ShaderProgram): void {
-        p.addAttributes(
-            {
-                type: 'mat3',
-                name: ScaleMatrixAttributeName,
-                normalized: false,
-                isInstanceAttribute: true,
-                needPassToFragmentShader: false,
-            }
-        )
+    applyToShaderProgram(p: ShaderProgramBuilder): void {
+        p.addAttributes({
+            name: ScaleTransformer.attributeName,
+            type: 'mat3',
+            normalized: false,
+            isInstanceAttribute: true,
+            needPassToFragmentShader: false,
+        });
 
-        p.addVertexActions<typeof ScaleMatrixAttributeName>(
-            {
-                apply({ vertPosVarName, attributes }) {
-                    const { scale_matrix } = attributes
-                    return `${vertPosVarName} *= ${scale_matrix}`
-                },
-            }
-        )
+        p.addVertexActions<'scale_matrix'>({
+            apply({ vertPosVarName, attributes }) {
+                return `${vertPosVarName} *= ${attributes.scale_matrix};`;
+            },
+        });
     }
 }
